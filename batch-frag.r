@@ -2,9 +2,13 @@
 
 rm(list=ls())
 
-options(scipen=999)
 library(tidyverse)
 library(magick)
+
+# Define global variables
+imglen <- 400 # img width and height in px
+fraglen <- 20 # fragment width and height in px
+
 
 # Create 'not in' function
 `%notin%` <- Negate(`%in%`)
@@ -14,12 +18,12 @@ imglist <- list.files(path=paste0(getwd(), "/input/"))
 
 # Import images, scale them to 400x400 (assuming equal width/height in first place)
 images <- map(imglist, ~image_read_pdf(paste0(getwd(), "/input/", .x))) %>%
-  map(~image_scale(.x, 400))
+  map(~image_scale(.x, imglen))
 
-# Create tbl with number of visible squares at each fragmentation level
+# Create tbl with number of visible squares at each fragmentation level, according to a power law
 vistb <- tibble(frag_level = 1:10, 
               prop_vis = map_dbl(1:10, ~ 0.75^(10-.x)),
-              nvis = ceiling(400 * prop_vis))
+              nvis = ceiling(imglen * prop_vis))
 
 # Work out the proportion of new squares to conceal in each stage of fragmentation
 # (working backwards from not fragmented to most fragmented)
@@ -27,11 +31,11 @@ conceal_prop <- rev(map_dbl(2:10, ~ vistb$nvis[.x] - vistb$nvis[.x-1]))
 
 # Get lists of all possible 20x20 squares within 400x400 grid
 gridcombos <- tibble(
-  row     = 1:400,
-  ytop    = rep(seq(from=0, to=380, by=20), 20),
-  ybottom = rep(seq(from=20, to=400, by=20), 20),
-  xleft   = map(seq(from=0, to=380, by=20), ~rep(.x, 20)) %>% unlist(),
-  xright  = map(seq(from=20, to=400, by=20), ~rep(.x, 20)) %>% unlist()
+  row     = 1:imglen,
+  ytop    = rep(seq(from=0, to=imglen-fraglen, by=fraglen), fraglen),
+  ybottom = rep(seq(from=fraglen, to=imglen, by=fraglen), fraglen),
+  xleft   = map(seq(from=0, to=imglen-fraglen, by=fraglen), ~rep(.x, fraglen)) %>% unlist(),
+  xright  = map(seq(from=fraglen, to=imglen, by=fraglen), ~rep(.x, fraglen)) %>% unlist()
 )
 
 for (img in 1:length(imglist)) {
@@ -50,24 +54,26 @@ for (img in 1:length(imglist)) {
     # filter newly chosen squares from tmpgrid
     tmpgrid <- filter(tmpgrid, row %notin% new_sqs$row)
     
-    # Draw image
+    # Draw image object and store
     fragimg <- image_draw(images[[img]])
     
-    # xleft, ybottom, xright, ytop
+    # Draw each white rectangle on stored image sequentially
     for (q in 1:length(drawn_sqs[[i+1]]$row)) {
       rect(drawn_sqs[[i+1]]$xleft[q], drawn_sqs[[i+1]]$ybottom[q], 
            drawn_sqs[[i+1]]$xright[q], drawn_sqs[[i+1]]$ytop[q], col="white", border=NA)
     }
     
-    # Write jpeg file
+    # Collate jpeg file
     dev.off()
-    
     # Write image
     image_write(fragimg, 
                 path=paste0(getwd(), "/output/", img, "_", "frag", 10-i, ".jpg"),
                 format="jpg")
-    
   }
   
+  # Draw and write the final, unfragmented image
+  fragimg <- image_draw(images[[img]])
+  image_write(fragimg,
+              path=paste0(getwd(), "/output/", img, "_frag10.jpg"), format="jpg")
 }
 
