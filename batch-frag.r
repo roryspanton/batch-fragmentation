@@ -38,6 +38,11 @@ gridcombos <- tibble(
   xright  = map(seq(from=fraglen, to=imglen, by=fraglen), ~rep(.x, fraglen)) %>% unlist()
 )
 
+# Initialize progress bar
+pb <- winProgressBar("Fragmentation Progress", 
+                     paste("0 /", length(imglist), " images fragmented:"),
+                     0, length(imglist), 0)
+
 for (img in 1:length(imglist)) {
   
   # Create empty tbl as first part of 'drawn_sqs' list
@@ -75,5 +80,10 @@ for (img in 1:length(imglist)) {
   fragimg <- image_draw(images[[img]])
   image_write(fragimg,
               path=paste0(getwd(), "/output/", img, "_frag10.jpg"), format="jpg")
+  
+  # Set progress bar status
+  setWinProgressBar(pb, img, label=paste(img, "/", length(imglist), "images fragmented"))
 }
 
+# Close progress bar
+close(pb)
