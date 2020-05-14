@@ -17,15 +17,16 @@ fraglen <- 20 # fragment width and height in px
 imglist <- list.files(path=paste0(getwd(), "/input/"))
 
 # Import images, scale them to 400x400 (assuming equal width/height in first place)
-images <- map(imglist, ~image_read_pdf(paste0(getwd(), "/input/", .x))) %>%
-  map(~image_scale(.x, imglen))
+images <- map(imglist, ~image_read(paste0(getwd(), "/input/", .x))) %>%
+  map(~image_scale(.x, imglen)) %>%
+  map(~image_modulate(.x, saturation = 0))
 
 # Create tbl with number of visible squares at each fragmentation level, according to a power law
 vistb <- tibble(frag_level = 1:10, 
               prop_vis = map_dbl(1:10, ~ 0.75^(10-.x)),
               nvis = ceiling(imglen * prop_vis))
 
-# Work out the proportion of new squares to conceal in each stage of fragmentation
+# Work out the number of new squares to conceal in each stage of fragmentation
 # (working backwards from not fragmented to most fragmented)
 conceal_prop <- rev(map_dbl(2:10, ~ vistb$nvis[.x] - vistb$nvis[.x-1]))
 
@@ -71,15 +72,12 @@ for (img in 1:length(imglist)) {
     # Collate jpeg file
     dev.off()
     # Write image
-    image_write(fragimg, 
-                path=paste0(getwd(), "/output/", img, "_", "frag", 10-i, ".jpg"),
-                format="jpg")
+    image_write(fragimg, path=paste0(getwd(), "/output/", img, "-frag", 10-i, ".jpg"), format="jpg")
   }
   
   # Draw and write the final, unfragmented image
   fragimg <- image_draw(images[[img]])
-  image_write(fragimg,
-              path=paste0(getwd(), "/output/", img, "_frag10.jpg"), format="jpg")
+  image_write(fragimg, path=paste0(getwd(), "/output/", img, "-frag10.jpg"), format="jpg")
   
   # Set progress bar status
   setWinProgressBar(pb, img, label=paste(img, "/", length(imglist), "images fragmented"))
