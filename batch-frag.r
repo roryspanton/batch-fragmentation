@@ -1,14 +1,19 @@
 ## Batch fragmentation in R
+## Author: Rory Spanton
 
 rm(list=ls())
 
 library(tidyverse)
 library(magick)
 
-# Define global variables
+## Parameter setting ------------
+
+# Define global parameters
 imglen <- 400 # img width and height in px
 fraglen <- 20 # fragment width and height in px
 fraglevels <- 15 # fragmentation levels (including fully revealed image)
+
+## Image read/preliminary adjustments ------------
 
 # Create 'not in' function
 `%notin%` <- Negate(`%in%`)
@@ -21,15 +26,6 @@ images <- map(imglist, ~image_read(paste0(getwd(), "/input/", .x))) %>%
   map(~image_scale(.x, imglen)) %>%
   map(~image_modulate(.x, saturation = 0))
 
-# Create tbl with number of visible squares at each fragmentation level, according to a power law
-vistb <- tibble(frag_level = 1:fraglevels, 
-              prop_vis = map_dbl(1:fraglevels, ~ 0.75^(fraglevels-.x)),
-              nvis = ceiling(imglen * prop_vis))
-
-# Work out the number of new squares to conceal in each stage of fragmentation
-# (working backwards from not fragmented to most fragmented)
-conceal_prop <- rev(map_dbl(2:fraglevels, ~ vistb$nvis[.x] - vistb$nvis[.x-1]))
-
 # Get lists of all possible 20x20 squares within 400x400 grid
 gridcombos <- tibble(
   row     = 1:imglen,
@@ -38,6 +34,8 @@ gridcombos <- tibble(
   xleft   = map(seq(from=0, to=imglen-fraglen, by=fraglen), ~rep(.x, fraglen)) %>% unlist(),
   xright  = map(seq(from=fraglen, to=imglen, by=fraglen), ~rep(.x, fraglen)) %>% unlist()
 )
+
+## Fragmentation algorithm -------------
 
 # Initialize progress bar
 pb <- winProgressBar("Fragmentation Progress", 
@@ -48,9 +46,22 @@ for (img in 1:length(imglist)) {
   
   # Create empty tbl as first part of 'drawn_sqs' list
   drawn_sqs <- list(tibble())
-  # Create temporary copy of gridcombos tbl
-  tmpgrid <- gridcombos
-  # Create list for fragmented images
+  # Work out which n by n squares of the image are white or not
+  fillvector <- map2(gridcombos$xleft, gridcombos$ytop, 
+                     ~ image_crop(image_edge(images[[img]]), geometry = paste0(fraglen, "x" fraglen, "+", .x, "+", .y))) %>%
+    map_lgl(~ any(as.vector(image_data(.x))) != 00)
+  # Append to temporary copy of grid, then filter out white squares
+  tmpgrid <- gridcombos %>%
+    mutate(filled = fillvector) %>%
+    dplyr::filter(filled == T)
+  # Calculate proportion of visible squares at each frag level, and number of visible squares at each level
+  tmpvistb <- tibble(frag_level = 1:fraglevels, 
+                     prop_vis = map_dbl(1:fraglevels, ~ 0.75^(fraglevels-.x)),
+                     nvis = ceiling(length(tmpgrid$filled) * prop_vis))
+  
+  # Work out the number of new squares to conceal in each stage of fragmentation
+  # (working backwards from not fragmented to most fragmented)
+  conceal_prop <- rev(map_dbl(2:fraglevels, ~ tmpvistb$nvis[.x] - tmpvistb$nvis[.x-1]))
   
   for (i in 1:(fraglevels-1)) {
     # Select new squares from the tmpgrid
