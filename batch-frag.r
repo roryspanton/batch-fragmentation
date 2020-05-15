@@ -38,9 +38,11 @@ gridcombos <- tibble(
 ## Fragmentation algorithm -------------
 
 # Initialize progress bar
-pb <- winProgressBar("Fragmentation Progress", 
-                     paste("0 /", length(imglist), " images fragmented:"),
-                     0, length(imglist), 0)
+cat("Fragmentation Progress:")
+
+pb <- txtProgressBar(title = "Fragmentation Progress", 
+                     label = paste("0 /", length(imglist), " images fragmented:"),
+                     min = 0, max = length(imglist), initial = 0)
 
 for (img in 1:length(imglist)) {
   
@@ -48,8 +50,9 @@ for (img in 1:length(imglist)) {
   drawn_sqs <- list(tibble())
   # Work out which n by n squares of the image are white or not
   fillvector <- map2(gridcombos$xleft, gridcombos$ytop, 
-                     ~ image_crop(image_edge(images[[img]]), geometry = paste0(fraglen, "x" fraglen, "+", .x, "+", .y))) %>%
+                     ~ image_crop(image_edge(images[[img]]), geometry = paste0(fraglen, "x", fraglen, "+", .x, "+", .y))) %>%
     map_lgl(~ any(as.vector(image_data(.x))) != 00)
+  
   # Append to temporary copy of grid, then filter out white squares
   tmpgrid <- gridcombos %>%
     mutate(filled = fillvector) %>%
@@ -91,7 +94,7 @@ for (img in 1:length(imglist)) {
   image_write(fragimg, path=paste0(getwd(), "/output/", img, "-frag", fraglevels, ".jpg"), format="jpg")
   
   # Set progress bar status
-  setWinProgressBar(pb, img, label=paste(img, "/", length(imglist), "images fragmented"))
+  setTxtProgressBar(pb, img, label=paste(img, "/", length(imglist), "images fragmented"))
 }
 
 # Close progress bar
